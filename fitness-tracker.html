@@ -1,0 +1,806 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>健身打卡日历</title>
+<style>
+  /* ========== 全局样式 ========== */
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    background: #f6f8fa;
+    color: #24292f;
+    padding: 20px;
+    min-height: 100vh;
+  }
+
+  /* ========== 主容器 ========== */
+  .container {
+    max-width: 960px;
+    margin: 0 auto;
+    background: #fff;
+    border-radius: 12px;
+    padding: 28px 32px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08), 0 4px 12px rgba(0,0,0,0.04);
+  }
+
+  /* ========== 标题区域 ========== */
+  .header {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 24px;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+  }
+
+  .header h1 {
+    font-size: 22px;
+    font-weight: 600;
+    color: #24292f;
+  }
+
+  .year-nav {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .year-nav button {
+    background: none;
+    border: 1px solid #d0d7de;
+    border-radius: 6px;
+    padding: 6px 14px;
+    font-size: 15px;
+    cursor: pointer;
+    color: #24292f;
+    transition: background 0.15s, border-color 0.15s;
+  }
+
+  .year-nav button:hover {
+    background: #f3f4f6;
+    border-color: #b0b8c1;
+  }
+
+  .year-nav .year-label {
+    font-size: 20px;
+    font-weight: 600;
+    min-width: 60px;
+    text-align: center;
+  }
+
+  /* ========== 统计区域 ========== */
+  .stats {
+    display: flex;
+    justify-content: center;
+    gap: 36px;
+    margin-bottom: 28px;
+    flex-wrap: wrap;
+  }
+
+  .stat-item {
+    text-align: center;
+  }
+
+  .stat-value {
+    font-size: 32px;
+    font-weight: 700;
+    color: #2da44e;
+    line-height: 1.2;
+  }
+
+  .stat-label {
+    font-size: 13px;
+    color: #656d76;
+    margin-top: 2px;
+  }
+
+  /* ========== 日历网格容器 ========== */
+  .calendar-wrapper {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 8px;
+  }
+
+  .calendar-outer {
+    display: inline-flex;
+    gap: 0;
+    min-width: fit-content;
+  }
+
+  /* 左侧星期标签列 */
+  .weekday-labels {
+    display: flex;
+    flex-direction: column;
+    padding-top: 26px; /* 与月份标签行高度(22px) + margin-bottom(4px)对齐 */
+    margin-right: 6px;
+  }
+
+  .weekday-labels span {
+    height: 13px;
+    line-height: 13px;
+    font-size: 11px;
+    color: #656d76;
+    margin-bottom: 3px;
+    display: flex;
+    align-items: center;
+  }
+
+  /* 日历主体 */
+  .calendar-body {
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* 月份标签行 */
+  .month-labels {
+    display: flex;
+    height: 22px;
+    margin-bottom: 4px;
+    position: relative;
+  }
+
+  .month-label {
+    font-size: 11px;
+    color: #656d76;
+    position: absolute;
+    white-space: nowrap;
+  }
+
+  /* 网格：每一列代表一周（周日到周六，纵向7天） */
+  .grid {
+    display: flex;
+    gap: 3px;
+  }
+
+  .week-column {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  /* 单日格子 */
+  .day-cell {
+    width: 13px;
+    height: 13px;
+    border-radius: 2px;
+    outline: 1px solid rgba(27,31,36,0.06);
+    cursor: default;
+    position: relative;
+    transition: outline-color 0.1s;
+  }
+
+  .day-cell.checked {
+    background: #40c463;
+  }
+
+  .day-cell.unchecked {
+    background: #ebedf0;
+  }
+
+  .day-cell.clickable {
+    cursor: pointer;
+  }
+
+  .day-cell.clickable:hover {
+    outline: 2px solid #2da44e;
+    outline-offset: -1px;
+  }
+
+  .day-cell.future {
+    background: #f0f0f0;
+    opacity: 0.5;
+  }
+
+  /* ========== Tooltip ========== */
+  .tooltip {
+    position: fixed;
+    background: #24292f;
+    color: #fff;
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    line-height: 1.5;
+    pointer-events: none;
+    z-index: 10000;
+    max-width: 260px;
+    word-break: break-all;
+    opacity: 0;
+    transition: opacity 0.12s;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+  }
+
+  .tooltip.visible {
+    opacity: 1;
+  }
+
+  .tooltip .tip-date {
+    font-weight: 600;
+  }
+
+  .tooltip .tip-content {
+    color: #c9d1d9;
+    font-size: 11px;
+    margin-top: 2px;
+  }
+
+  /* ========== 模态框遮罩 ========== */
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.45);
+    z-index: 9999;
+    justify-content: center;
+    align-items: center;
+    padding: 16px;
+  }
+
+  .modal-overlay.active {
+    display: flex;
+  }
+
+  /* 模态框主体 */
+  .modal {
+    background: #fff;
+    border-radius: 12px;
+    padding: 24px;
+    width: 100%;
+    max-width: 460px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+    animation: modalIn 0.2s ease-out;
+  }
+
+  @keyframes modalIn {
+    from { transform: scale(0.95); opacity: 0; }
+    to   { transform: scale(1);    opacity: 1; }
+  }
+
+  .modal h2 {
+    font-size: 18px;
+    font-weight: 600;
+    margin-bottom: 16px;
+    color: #24292f;
+  }
+
+  .modal textarea {
+    width: 100%;
+    min-height: 100px;
+    padding: 10px 12px;
+    border: 1px solid #d0d7de;
+    border-radius: 8px;
+    font-size: 14px;
+    font-family: inherit;
+    resize: vertical;
+    color: #24292f;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+
+  .modal textarea:focus {
+    border-color: #2da44e;
+    box-shadow: 0 0 0 3px rgba(45,164,78,0.15);
+  }
+
+  .modal textarea::placeholder {
+    color: #a0a8b4;
+  }
+
+  .modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 16px;
+  }
+
+  .modal-actions button {
+    padding: 8px 20px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: background 0.15s, border-color 0.15s;
+  }
+
+  .btn-save {
+    background: #2da44e;
+    color: #fff;
+    border-color: #2da44e;
+  }
+
+  .btn-save:hover {
+    background: #278f43;
+  }
+
+  .btn-cancel {
+    background: #fff;
+    color: #24292f;
+    border-color: #d0d7de;
+  }
+
+  .btn-cancel:hover {
+    background: #f3f4f6;
+  }
+
+  .btn-delete {
+    background: #fff;
+    color: #cf222e;
+    border-color: #cf222e;
+    margin-right: auto;
+  }
+
+  .btn-delete:hover {
+    background: #ffebe9;
+  }
+
+  /* ========== 移动端适配 ========== */
+  @media (max-width: 600px) {
+    body { padding: 10px; }
+    .container { padding: 16px; }
+    .header h1 { font-size: 18px; }
+    .stats { gap: 20px; }
+    .stat-value { font-size: 26px; }
+    .modal { padding: 18px; }
+    .modal h2 { font-size: 16px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ========== 主容器 ========== -->
+<div class="container">
+
+  <!-- 标题 + 年份导航 -->
+  <div class="header">
+    <h1>💪 健身打卡日历</h1>
+    <div class="year-nav">
+      <button id="btn-prev" aria-label="上一年">&lt;</button>
+      <span class="year-label" id="year-label">2026</span>
+      <button id="btn-next" aria-label="下一年">&gt;</button>
+    </div>
+  </div>
+
+  <!-- 统计 -->
+  <div class="stats">
+    <div class="stat-item">
+      <div class="stat-value" id="stat-streak">0</div>
+      <div class="stat-label">🔥 当前连续打卡天数</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-value" id="stat-total">0</div>
+      <div class="stat-label">📅 总打卡天数（全部年份）</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-value" id="stat-year">0</div>
+      <div class="stat-label">📊 本年度打卡天数</div>
+    </div>
+  </div>
+
+  <!-- 日历 -->
+  <div class="calendar-wrapper">
+    <div class="calendar-outer">
+      <!-- 左侧星期标签 -->
+      <div class="weekday-labels">
+        <span>一</span>
+        <span>二</span>
+        <span>三</span>
+        <span>四</span>
+        <span>五</span>
+        <span>六</span>
+        <span>日</span>
+      </div>
+
+      <!-- 日历主体 -->
+      <div class="calendar-body">
+        <div class="month-labels" id="month-labels"></div>
+        <div class="grid" id="calendar-grid"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Tooltip -->
+<div class="tooltip" id="tooltip">
+  <div class="tip-date" id="tip-date"></div>
+  <div class="tip-content" id="tip-content"></div>
+</div>
+
+<!-- 模态框 -->
+<div class="modal-overlay" id="modal-overlay">
+  <div class="modal">
+    <h2 id="modal-title">2026-01-01 打卡</h2>
+    <textarea id="modal-textarea" placeholder="写下今天的健身内容，例如：跑步5公里、俯卧撑100个……"></textarea>
+    <div class="modal-actions">
+      <button class="btn-delete" id="btn-delete" style="display:none;">删除</button>
+      <button class="btn-cancel" id="btn-cancel">取消</button>
+      <button class="btn-save" id="btn-save">保存</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// 健身打卡日历 — 全部逻辑
+// ============================================================
+
+(function () {
+  'use strict';
+
+  // ---- 常量 ----
+  const STORAGE_KEY = 'fitness_checkins'; // localStorage 键名
+  const CELL_SIZE   = 13;                 // 格子尺寸（px）
+  const CELL_GAP    = 3;                  // 格子间距（px）
+
+  // ---- 状态 ----
+  let currentYear = new Date().getFullYear();
+  let checkins    = loadCheckins();       // 读取所有打卡数据
+  let selectedDate = null;                // 当前模态框操作的日期
+
+  // ---- DOM 引用 ----
+  const $yearLabel   = document.getElementById('year-label');
+  const $grid        = document.getElementById('calendar-grid');
+  const $monthLabels = document.getElementById('month-labels');
+  const $tooltip     = document.getElementById('tooltip');
+  const $tipDate     = document.getElementById('tip-date');
+  const $tipContent  = document.getElementById('tip-content');
+  const $modalOverlay= document.getElementById('modal-overlay');
+  const $modalTitle  = document.getElementById('modal-title');
+  const $textarea    = document.getElementById('modal-textarea');
+  const $btnSave     = document.getElementById('btn-save');
+  const $btnCancel   = document.getElementById('btn-cancel');
+  const $btnDelete   = document.getElementById('btn-delete');
+  const $statStreak  = document.getElementById('stat-streak');
+  const $statTotal   = document.getElementById('stat-total');
+  const $statYear    = document.getElementById('stat-year');
+
+  // ============================================================
+  // 数据层：localStorage 读写
+  // ============================================================
+
+  /** 从 localStorage 读取打卡数据，返回对象 { "YYYY-MM-DD": "内容" } */
+  function loadCheckins() {
+    try {
+      return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
+    } catch (e) {
+      return {};
+    }
+  }
+
+  /** 保存打卡数据到 localStorage */
+  function saveCheckins() {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(checkins));
+  }
+
+  /** 格式化日期为 YYYY-MM-DD */
+  function fmtDate(d) {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
+
+  // ============================================================
+  // 日历渲染
+  // ============================================================
+
+  /**
+   * 获取某年某月第一天是星期几（0=周日）
+   * 以及该月总天数
+   */
+  function getMonthInfo(year, month) {
+    const firstDay = new Date(year, month, 1).getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    return { firstDay, daysInMonth };
+  }
+
+  /**
+   * 生成一整年的日期数据结构
+   * 返回一个数组，每个元素是一"周"（列），包含7个日期对象（周日→周六）
+   * 日期对象：{ date: Date, dateStr: string, inYear: boolean }
+   * inYear=false 表示该格子属于上一年/下一年的填充位
+   */
+  function buildYearData(year) {
+    const weeks = [];
+    let currentWeek = [];
+
+    // 从1月1日开始
+    const startDate = new Date(year, 0, 1);
+    const startDay  = startDate.getDay(); // 0=周日
+
+    // 填充1月1日之前的空位（用上一年日期占位，但标记为不属于本年）
+    for (let i = 0; i < startDay; i++) {
+      const d = new Date(year, 0, 1 - (startDay - i));
+      currentWeek.push({ date: d, dateStr: fmtDate(d), inYear: false });
+    }
+
+    // 遍历全年每一天
+    const totalDays = (new Date(year + 1, 0, 1) - startDate) / 86400000;
+    for (let i = 0; i < totalDays; i++) {
+      const d = new Date(year, 0, 1 + i);
+      currentWeek.push({ date: d, dateStr: fmtDate(d), inYear: true });
+      if (currentWeek.length === 7) {
+        weeks.push(currentWeek);
+        currentWeek = [];
+      }
+    }
+
+    // 如果最后一周不满7天，用下一年日期填充
+    if (currentWeek.length > 0) {
+      const nextYear = year + 1;
+      let padIdx = 1;
+      while (currentWeek.length < 7) {
+        const d = new Date(nextYear, 0, padIdx++);
+        currentWeek.push({ date: d, dateStr: fmtDate(d), inYear: false });
+      }
+      weeks.push(currentWeek);
+    }
+
+    return weeks;
+  }
+
+  /** 渲染整年日历 */
+  function renderCalendar() {
+    $yearLabel.textContent = currentYear;
+    $grid.innerHTML = '';
+    $monthLabels.innerHTML = '';
+
+    const weeks = buildYearData(currentYear);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // -- 渲染月份标签 --
+    // 找出每个月第一个出现的周列索引
+    const monthPositions = [];
+    for (let m = 0; m < 12; m++) {
+      for (let w = 0; w < weeks.length; w++) {
+        const week = weeks[w];
+        for (const cell of week) {
+          if (cell.inYear && cell.date.getMonth() === m) {
+            monthPositions.push({ month: m, weekIndex: w });
+            break;
+          }
+        }
+        if (monthPositions.length === m + 1) break;
+      }
+    }
+
+    const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    monthPositions.forEach(mp => {
+      const label = document.createElement('span');
+      label.className = 'month-label';
+      label.textContent = monthNames[mp.month];
+      // 每列宽 = CELL_SIZE + CELL_GAP
+      label.style.left = (mp.weekIndex * (CELL_SIZE + CELL_GAP)) + 'px';
+      $monthLabels.appendChild(label);
+    });
+
+    // -- 渲染日期格子 --
+    weeks.forEach((week, weekIdx) => {
+      const col = document.createElement('div');
+      col.className = 'week-column';
+
+      week.forEach(cellInfo => {
+        const cell = document.createElement('div');
+        cell.className = 'day-cell';
+
+        if (!cellInfo.inYear) {
+          // 不属于本年的填充格
+          cell.classList.add('unchecked');
+          cell.style.opacity = '0.3';
+        } else {
+          const isFuture = cellInfo.date > today;
+          const hasCheckin = checkins[cellInfo.dateStr] !== undefined;
+
+          if (isFuture) {
+            cell.classList.add('future');
+          } else if (hasCheckin) {
+            cell.classList.add('checked');
+            cell.classList.add('clickable');
+          } else {
+            cell.classList.add('unchecked');
+            cell.classList.add('clickable');
+          }
+
+          // 数据属性，用于 tooltip 和点击
+          cell.dataset.date = cellInfo.dateStr;
+          cell.dataset.inYear = '1';
+          cell.dataset.future = isFuture ? '1' : '0';
+        }
+
+        col.appendChild(cell);
+      });
+
+      $grid.appendChild(col);
+    });
+  }
+
+  // ============================================================
+  // 统计计算
+  // ============================================================
+
+  function updateStats() {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayStr = fmtDate(today);
+
+    // ① 当前连续打卡天数（从今天往回数）
+    let streak = 0;
+    let d = new Date(today);
+    while (true) {
+      const ds = fmtDate(d);
+      if (checkins[ds] !== undefined) {
+        streak++;
+        d.setDate(d.getDate() - 1);
+      } else {
+        // 如果今天没打卡，不计入连续，但继续往前看也不合理
+        // 标准做法：如果今天未打卡，streak 为 0
+        if (ds === todayStr) {
+          // 今天还没打卡，streak = 0
+          streak = 0;
+        }
+        break;
+      }
+    }
+
+    // ② 总打卡天数（全部年份）
+    const total = Object.keys(checkins).length;
+
+    // ③ 本年度打卡天数
+    const yearPrefix = currentYear + '-';
+    const yearCount = Object.keys(checkins).filter(k => k.startsWith(yearPrefix)).length;
+
+    $statStreak.textContent = streak;
+    $statTotal.textContent  = total;
+    $statYear.textContent   = yearCount;
+  }
+
+  // ============================================================
+  // Tooltip
+  // ============================================================
+
+  function showTooltip(e, dateStr) {
+    const content = checkins[dateStr];
+    $tipDate.textContent = dateStr;
+    $tipContent.textContent = content ? (content.length > 60 ? content.slice(0, 60) + '…' : content) : '未打卡';
+    $tipContent.style.display = 'block';
+
+    const rect = e.target.getBoundingClientRect();
+    let left = rect.left + rect.width / 2;
+    let top  = rect.top - 8;
+
+    $tooltip.classList.add('visible');
+
+    // 先设为 auto 以获取实际宽高
+    $tooltip.style.left = '0px';
+    $tooltip.style.top  = '0px';
+    const tipRect = $tooltip.getBoundingClientRect();
+
+    left = left - tipRect.width / 2;
+    top  = top - tipRect.height;
+
+    // 边界修正
+    if (left < 4) left = 4;
+    if (left + tipRect.width > window.innerWidth - 4) left = window.innerWidth - tipRect.width - 4;
+    if (top < 4) top = rect.bottom + 8;
+
+    $tooltip.style.left = left + 'px';
+    $tooltip.style.top  = top + 'px';
+  }
+
+  function hideTooltip() {
+    $tooltip.classList.remove('visible');
+  }
+
+  // ============================================================
+  // 模态框
+  // ============================================================
+
+  function openModal(dateStr) {
+    selectedDate = dateStr;
+    $modalTitle.textContent = dateStr + ' 打卡';
+    $textarea.value = checkins[dateStr] || '';
+    $btnDelete.style.display = checkins[dateStr] ? 'inline-block' : 'none';
+    $modalOverlay.classList.add('active');
+    setTimeout(() => $textarea.focus(), 100);
+  }
+
+  function closeModal() {
+    $modalOverlay.classList.remove('active');
+    selectedDate = null;
+  }
+
+  function saveCheckin() {
+    if (!selectedDate) return;
+    const content = $textarea.value.trim();
+    if (content) {
+      checkins[selectedDate] = content;
+    } else {
+      delete checkins[selectedDate];
+    }
+    saveCheckins();
+    closeModal();
+    renderCalendar();
+    updateStats();
+  }
+
+  function deleteCheckin() {
+    if (!selectedDate) return;
+    if (!confirm('确定要删除 ' + selectedDate + ' 的打卡记录吗？')) return;
+    delete checkins[selectedDate];
+    saveCheckins();
+    closeModal();
+    renderCalendar();
+    updateStats();
+  }
+
+  // ============================================================
+  // 事件绑定
+  // ============================================================
+
+  // 年份切换
+  document.getElementById('btn-prev').addEventListener('click', () => {
+    currentYear--;
+    renderCalendar();
+    updateStats();
+  });
+
+  document.getElementById('btn-next').addEventListener('click', () => {
+    currentYear++;
+    renderCalendar();
+    updateStats();
+  });
+
+  // 格子点击（事件委托）
+  $grid.addEventListener('click', (e) => {
+    const cell = e.target.closest('.day-cell');
+    if (!cell || cell.dataset.inYear !== '1') return;
+    if (cell.dataset.future === '1') return; // 未来日期无效
+    openModal(cell.dataset.date);
+  });
+
+  // Tooltip（事件委托）
+  $grid.addEventListener('mouseover', (e) => {
+    const cell = e.target.closest('.day-cell');
+    if (!cell || cell.dataset.inYear !== '1') return;
+    showTooltip(e, cell.dataset.date);
+  });
+
+  $grid.addEventListener('mousemove', (e) => {
+    const cell = e.target.closest('.day-cell');
+    if (!cell || cell.dataset.inYear !== '1') return;
+    showTooltip(e, cell.dataset.date);
+  });
+
+  $grid.addEventListener('mouseout', (e) => {
+    const cell = e.target.closest('.day-cell');
+    if (cell) hideTooltip();
+  });
+
+  // 模态框按钮
+  $btnSave.addEventListener('click', saveCheckin);
+  $btnCancel.addEventListener('click', closeModal);
+  $btnDelete.addEventListener('click', deleteCheckin);
+
+  // 点击遮罩关闭
+  $modalOverlay.addEventListener('click', (e) => {
+    if (e.target === $modalOverlay) closeModal();
+  });
+
+  // ESC 关闭
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeModal();
+  });
+
+  // ============================================================
+  // 初始化
+  // ============================================================
+  renderCalendar();
+  updateStats();
+
+})();
+</script>
+</body>
+</html>
