@@ -626,24 +626,35 @@
     today.setHours(0, 0, 0, 0);
     const todayStr = fmtDate(today);
 
-    // ① 当前连续打卡天数（从今天往回数）
+    // ① 当前连续打卡天数（从昨天往回数，今天打卡则额外+1）
+    // 逻辑：以"昨天"是否打卡为中断判断依据
+    // - 今天已打卡 → 从今天往回数
+    // - 今天未打卡但昨天已打卡 → 从昨天往回数（保持连续）
+    // - 今天和昨天都未打卡 → 连续中断，streak = 0
     let streak = 0;
-    let d = new Date(today);
-    while (true) {
-      const ds = fmtDate(d);
-      if (checkins[ds] !== undefined) {
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayStr = fmtDate(yesterday);
+
+    const todayChecked = checkins[todayStr] !== undefined;
+    const yesterdayChecked = checkins[yesterdayStr] !== undefined;
+
+    if (todayChecked) {
+      // 今天已打卡，从今天开始往回数
+      let d = new Date(today);
+      while (checkins[fmtDate(d)] !== undefined) {
         streak++;
         d.setDate(d.getDate() - 1);
-      } else {
-        // 如果今天没打卡，不计入连续，但继续往前看也不合理
-        // 标准做法：如果今天未打卡，streak 为 0
-        if (ds === todayStr) {
-          // 今天还没打卡，streak = 0
-          streak = 0;
-        }
-        break;
+      }
+    } else if (yesterdayChecked) {
+      // 今天未打卡但昨天已打卡，从昨天开始往回数（不归零）
+      let d = new Date(yesterday);
+      while (checkins[fmtDate(d)] !== undefined) {
+        streak++;
+        d.setDate(d.getDate() - 1);
       }
     }
+    // 今天和昨天都没打卡 → streak 保持为 0
 
     // ② 总打卡天数（全部年份）
     const total = Object.keys(checkins).length;
